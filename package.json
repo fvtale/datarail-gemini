@@ -1,0 +1,14 @@
+{
+  "name": "datarail-gemini",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gemini at datarail.org/Gemini: hello world, drawn as twin circuit traces.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "serve": "node tools/serve.mjs",
+    "check": "node --check site/js/helloworld.js && node --check tools/serve.mjs"
+  }
+}

@@ -1,0 +1,95 @@
+name: Publish to datarail.org
+
+# Copies site/ into datarail-site/public/Gemini, whose own deploy workflow
+# ships it to IONOS on push. So a merge here becomes a live page two workflows
+# later. This repository never touches the web server or its credentials.
+#
+# Off until the repository variable PUBLISH_TO_SITE is set to true and the
+# DATARAIL_SITE_DEPLOY_KEY secret holds the private half of a write deploy key
+# on fvtale/datarail-site -- the same shape Movies and the Library use. Until
+# then every push still runs the check, so a broken script shows up red before
+# it could ship.
+#
+# The folder is /Gemini with a capital G. The web server is case-sensitive, so
+# that is the only spelling of the URL that works.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Copy, but do not commit to the site'
+        type: boolean
+        default: true
+
+concurrency:
+  group: gemini-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Gemini
+        uses: actions/checkout@v5
+        with:
+          path: gemini
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Syntax-check every script
+        working-directory: gemini
+        run: for f in tools/*.mjs site/js/*.js; do node --check "$f"; done
+
+      - name: Publishing is switched off
+        if: vars.PUBLISH_TO_SITE != 'true'
+        run: echo "::notice title=Checked, not published::Set the PUBLISH_TO_SITE variable to true and add the DATARAIL_SITE_DEPLOY_KEY secret to copy this into datarail-site."
+
+      - name: Check out the site
+        if: vars.PUBLISH_TO_SITE == 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: fvtale/datarail-site
+          ssh-key: ${{ secrets.DATARAIL_SITE_DEPLOY_KEY }}
+          path: site
+
+      # --delete so a file removed here is removed there. It still will not
+      # disappear from the webspace on its own: the IONOS deploy only ever adds
+      # or overwrites.
+      - name: Copy the page into place
+        if: vars.PUBLISH_TO_SITE == 'true'
+        run: rsync -a --delete gemini/site/ site/public/Gemini/
+
+      - name: Commit to the site
+        if: vars.PUBLISH_TO_SITE == 'true' && (github.event_name == 'push' || inputs.dry_run == false)
+        working-directory: site
+        run: |
+          # status, not diff: the first publish creates public/Gemini/ from
+          # nothing, and diff cannot see untracked files.
+          if [ -z "$(git status --porcelain -- public/Gemini)" ]; then
+            echo "site already matches, nothing to push"
+            exit 0
+          fi
+          git config user.name  "datarail-gemini"
+          git config user.email "contact@datarail.org"
+          git add public/Gemini
+          git commit -m "Update the Gemini page (datarail-gemini@${GITHUB_SHA::12})"
+          # Other projects push to this repository too. Rebase rather than force.
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Say what a dry run would have done
+        if: vars.PUBLISH_TO_SITE == 'true' && github.event_name == 'workflow_dispatch' && inputs.dry_run
+        working-directory: site
+        run: |
+          echo "Dry run. These files would change under public/Gemini:"
+          git status --porcelain -- public/Gemini || echo "(none)"

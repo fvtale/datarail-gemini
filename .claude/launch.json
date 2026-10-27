@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gemini",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve.mjs", "5240"],
+      "port": 5240,
+      "url": "http://localhost:5240"
+    }
+  ]
+}

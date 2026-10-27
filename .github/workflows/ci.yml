@@ -1,0 +1,29 @@
+name: CI
+
+# Pull requests only. A push to main goes straight to Publish, which runs the
+# same check as its first step and will not ship a page that fails it.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      # No install step: the page has no dependencies, on purpose.
+      - name: Syntax-check every script
+        run: for f in tools/*.mjs site/js/*.js; do node --check "$f"; done
